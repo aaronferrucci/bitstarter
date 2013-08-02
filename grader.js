@@ -24,7 +24,9 @@ References:
 var fs = require('fs');
 var program = require('commander');
 var cheerio = require('cheerio');
+var rest = require('restler');
 var HTMLFILE_DEFAULT = "index.html";
+var URL_DEFAULT = "http://damp-crag-6213.herokuapp.com/";
 var CHECKSFILE_DEFAULT = "checks.json";
 
 var assertFileExists = function(infile) {
@@ -61,14 +63,38 @@ var clone = function(fn) {
     return fn.bind({});
 };
 
+var makefn = function(filename) {
+    var writeToFile = function(result, response) {
+        if (result instanceof Error) {
+            console.error('Error: ' + util.format(response.message));
+        } else {
+            fs.writeFileSync(filename, result);
+            var checkJson = checkHtmlFile(filename, program.checks);
+            var outJson = JSON.stringify(checkJson, null, 4);
+            console.log(outJson);
+       }
+    };
+    return writeToFile;
+}
+
 if(require.main == module) {
     program
         .option('-c, --checks <check_file>', 'Path to checks.json', clone(assertFileExists), CHECKSFILE_DEFAULT)
         .option('-f, --file <html_file>', 'Path to index.html', clone(assertFileExists), HTMLFILE_DEFAULT)
+        .option('-u, --url <url>', 'URL to download')
         .parse(process.argv);
-    var checkJson = checkHtmlFile(program.file, program.checks);
-    var outJson = JSON.stringify(checkJson, null, 4);
-    console.log(outJson);
+    // If a url was specified, ignore the file option
+    // load the url, save it in a temporary file, parse that file.
+    if (typeof program.url != "undefined") {
+      program.file = 'ack'
+      var logfn = makefn(program.file);
+      rest.get(program.url).on('complete', logfn);
+    } else {
+        var checkJson = checkHtmlFile(program.file, program.checks);
+        var outJson = JSON.stringify(checkJson, null, 4);
+        console.log(outJson);
+    }
 } else {
     exports.checkHtmlFile = checkHtmlFile;
 }
+
